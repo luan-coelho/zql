@@ -6,19 +6,43 @@ struct ZqlExtension {
 }
 
 const SERVER_NAME: &str = "zql-server";
-const GITHUB_REPO: &str = "luanrabelo/zql";
+const GITHUB_REPO: &str = "luan-coelho/zql";
 
 impl ZqlExtension {
     fn language_server_binary_path(
         &mut self,
         language_server_id: &LanguageServerId,
     ) -> Result<String> {
+        // Return cached path if still valid
         if let Some(path) = &self.cached_binary_path {
             if fs::metadata(path).map_or(false, |m| m.is_file()) {
                 return Ok(path.clone());
             }
         }
 
+        // Check if binary exists in extension directory (copied manually or from previous download)
+        if fs::metadata(SERVER_NAME).map_or(false, |m| m.is_file()) {
+            self.cached_binary_path = Some(SERVER_NAME.to_string());
+            return Ok(SERVER_NAME.to_string());
+        }
+
+        // Try to find in ~/.cargo/bin (installed via `cargo install`)
+        if let Ok(home) = std::env::var("HOME") {
+            let cargo_path = format!("{home}/.cargo/bin/{SERVER_NAME}");
+            if fs::metadata(&cargo_path).map_or(false, |m| m.is_file()) {
+                self.cached_binary_path = Some(cargo_path.clone());
+                return Ok(cargo_path);
+            }
+        }
+
+        // Try to download from GitHub Releases
+        self.download_from_github(language_server_id)
+    }
+
+    fn download_from_github(
+        &mut self,
+        language_server_id: &LanguageServerId,
+    ) -> Result<String> {
         zed::set_language_server_installation_status(
             language_server_id,
             &zed::LanguageServerInstallationStatus::CheckingForUpdate,

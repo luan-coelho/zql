@@ -1,6 +1,0 @@
-name = "SQL"
-grammar = "sql"
-path_suffixes = ["sql"]
-line_comments = ["-- "]
-block_comment = ["/* ", " */"]
-tab_size = 2

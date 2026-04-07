@@ -136,6 +136,75 @@ pub fn format_schema(schema: &DatabaseSchema) -> String {
     md
 }
 
+pub fn format_query_result_terminal(result: &QueryResult) -> String {
+    let mut out = String::new();
+
+    if result.columns.is_empty() {
+        out.push_str(&format!(
+            "Query OK, {} rows affected ({}ms)\n",
+            result.rows_affected, result.execution_time_ms
+        ));
+        return out;
+    }
+
+    let mut widths: Vec<usize> = result.columns.iter().map(|c| c.len()).collect();
+    for row in &result.rows {
+        for (i, val) in row.iter().enumerate() {
+            if i < widths.len() {
+                widths[i] = widths[i].max(val.len());
+            }
+        }
+    }
+
+    // Top border
+    out.push('┌');
+    for (i, w) in widths.iter().enumerate() {
+        out.push_str(&"─".repeat(w + 2));
+        out.push(if i < widths.len() - 1 { '┬' } else { '┐' });
+    }
+    out.push('\n');
+
+    // Header
+    out.push('│');
+    for (i, col) in result.columns.iter().enumerate() {
+        out.push_str(&format!(" {:<width$} │", col, width = widths[i]));
+    }
+    out.push('\n');
+
+    // Header separator
+    out.push('├');
+    for (i, w) in widths.iter().enumerate() {
+        out.push_str(&"─".repeat(w + 2));
+        out.push(if i < widths.len() - 1 { '┼' } else { '┤' });
+    }
+    out.push('\n');
+
+    // Rows
+    for row in &result.rows {
+        out.push('│');
+        for (i, val) in row.iter().enumerate() {
+            let width = widths.get(i).copied().unwrap_or(val.len());
+            out.push_str(&format!(" {:<width$} │", val, width = width));
+        }
+        out.push('\n');
+    }
+
+    // Bottom border
+    out.push('└');
+    for (i, w) in widths.iter().enumerate() {
+        out.push_str(&"─".repeat(w + 2));
+        out.push(if i < widths.len() - 1 { '┴' } else { '┘' });
+    }
+    out.push('\n');
+
+    out.push_str(&format!(
+        "{} rows ({}ms)\n",
+        result.rows_affected, result.execution_time_ms
+    ));
+
+    out
+}
+
 pub fn format_sql(sql: &str) -> String {
     use sqlparser::dialect::PostgreSqlDialect;
     use sqlparser::parser::Parser;
