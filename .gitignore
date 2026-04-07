@@ -1,0 +1,5 @@
+/target
+.zql/results/
+*.swp
+*.swo
+.DS_Store
