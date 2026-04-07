@@ -52,7 +52,15 @@ async fn run_query(
     match result {
         Ok(result) => {
             let formatted = formatter::format_query_result(&result);
-            show_result_file(backend, &formatted, "query").await;
+            // Save to file
+            save_result_file(backend, &formatted, "query").await;
+            // Show notification with summary
+            let summary = format!(
+                "Query OK: {} rows ({}ms)",
+                result.rows_affected, result.execution_time_ms
+            );
+            backend.client.show_message(MessageType::INFO, &summary).await;
+            backend.client.log_message(MessageType::INFO, &formatted).await;
             Ok(Some(serde_json::json!({ "success": true })))
         }
         Err(e) => {
@@ -92,7 +100,8 @@ async fn explain_query(
     match result {
         Ok(plan) => {
             let content = format!("## Query Plan\n\n```\n{plan}\n```\n");
-            show_result_file(backend, &content, "explain").await;
+            save_result_file(backend, &content, "explain").await;
+            backend.client.show_message(MessageType::INFO, &plan).await;
             Ok(Some(serde_json::json!({ "success": true })))
         }
         Err(e) => {
@@ -149,7 +158,8 @@ async fn show_schema(backend: &Backend) -> Result<Option<serde_json::Value>> {
 
     let formatted = formatter::format_schema(schema);
 
-    show_result_file(backend, &formatted, "schema").await;
+    save_result_file(backend, &formatted, "schema").await;
+    backend.client.show_message(MessageType::INFO, "Schema saved to .zql/results/").await;
     Ok(Some(serde_json::json!({ "success": true })))
 }
 
@@ -178,7 +188,7 @@ async fn switch_connection(
     refresh_schema(backend).await
 }
 
-async fn show_result_file(backend: &Backend, content: &str, prefix: &str) {
+async fn save_result_file(backend: &Backend, content: &str, prefix: &str) {
     let workspace = backend.workspace_path.read().await;
     let Some(ref ws_path) = *workspace else {
         return;
@@ -190,18 +200,6 @@ async fn show_result_file(backend: &Backend, content: &str, prefix: &str) {
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
     let result_path = format!("{results_dir}/{prefix}_{timestamp}.md");
     let _ = std::fs::write(&result_path, content);
-
-    if let Ok(result_uri) = Url::from_file_path(&result_path) {
-        let _ = backend
-            .client
-            .show_document(ShowDocumentParams {
-                uri: result_uri,
-                external: Some(false),
-                take_focus: Some(true),
-                selection: None,
-            })
-            .await;
-    }
 }
 
 fn parse_query_args(args: &[serde_json::Value]) -> Result<(String, u32, u32)> {
